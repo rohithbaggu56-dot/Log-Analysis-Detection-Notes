@@ -110,6 +110,10 @@ Example log evidence:
 
 ---
 
+**Outcome:**
+- Improved ability to triage Linux-based authentication alerts
+- Developed a structured investigation workflow similar to SOC environments
+
 ### 🔎 Investigation Commands Used
 
 ```bash
