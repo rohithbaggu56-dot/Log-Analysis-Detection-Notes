@@ -1,123 +1,130 @@
-## 📊 Log Analysis & Detection Notes (SOC Investigation Lab)
+# 📊 Log Analysis & Detection
 
-This section documents my hands-on practice with **Windows and Linux log analysis** to understand how malicious and suspicious activity appears in logs and how SOC analysts detect, investigate, and escalate incidents.
+![Linux](https://img.shields.io/badge/Linux_Log_Analysis-333333?style=for-the-badge&logo=linux&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows_Event_Viewer-2F7DE1?style=for-the-badge)
+![Wireshark](https://img.shields.io/badge/Wireshark-1679A7?style=for-the-badge&logo=wireshark&logoColor=white)
+![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-FF0000?style=for-the-badge)
 
-The focus was on **event correlation, identifying Indicators of Compromise (IOCs), and building a structured investigation mindset**.
-
----
-
-## 🪟 Windows Log Analysis
-
-### 🔐 Windows Security Event Logs (Event Viewer)
-
-I analyzed Windows Security logs to understand authentication behavior, account activity, and system changes.
-
-#### Key Event IDs Explored
-
-| Event ID | Description | SOC Relevance |
-|--------|-------------|---------------|
-| **4624** | Successful logon | Baseline user behavior |
-| **4625** | Failed logon attempt | Brute force / password spray |
-| **4634** | Logoff | Session tracking |
-| **4672** | Special privileges assigned | Admin access detection |
-| **4688** | Process creation | Malware execution tracking |
-| **4697** | Service installed | Persistence mechanism |
-| **4720** | New user created | Unauthorized account creation |
-| **4728 / 4732** | User added to group | Privilege escalation |
-| **4799** | Local group membership queried | Reconnaissance activity |
+Raw Windows and Linux log analysis focused on reading event data directly and identifying suspicious activity without relying on SIEM alerts. Every finding here came from reading actual log files and packet captures.
 
 ---
 
-### 🧠 Investigation Approach (Windows)
-
-1. Established **baseline behavior** using successful logons (4624)
-2. Identified abnormal patterns:
-   - Repeated **4625** failures from same IP/user
-   - Logons at unusual hours
-3. Correlated **privilege-related events**:
-   - 4672 + 4688 → possible admin misuse
-4. Investigated suspicious processes:
-   - Unknown executables
-   - Unexpected parent-child process chains
-5. Flagged potential IOCs:
-   - Source IPs
-   - Suspicious usernames
-   - Unusual process names
+## 📂 What Was Analyzed
 
 ---
 
-## 🧩 Sysmon Analysis (Advanced Windows Telemetry)
+### 🔴 SSH Brute Force Detection — Raw Log Analysis
 
-Configured and explored **Sysmon logs** for deeper visibility beyond default Windows logging.
+Analyzed OpenSSH_2k.log directly in the terminal using grep filtering to identify brute force patterns across multiple source IPs.
 
-#### Key Sysmon Event IDs
+**Raw terminal analysis — head command to read the log, grep -Ei filter to extract failed password, invalid user, and authentication failure events:**
 
-| Sysmon ID | Description | Use Case |
-|---------|-------------|---------|
-| **1** | Process creation | Detect suspicious execution |
-| **3** | Network connection | Outbound C2 detection |
-| **7** | Image loaded | DLL hijacking |
-| **10** | Process access | Credential dumping |
-| **11** | File creation | Malware drops |
-| **13** | Registry modification | Persistence |
+<img width="1910" height="922" alt="Ubuntu-SSH-log analysis" src="https://github.com/user-attachments/assets/8650a691-144b-40d9-8680-860f290ee371" />
 
----
+<br>
 
-### 🔍 Detection Logic with Sysmon
+**Findings from the raw log:**
 
-- Identified suspicious behavior such as:
-  - Command-line abuse (`powershell`, `cmd`, encoded commands)
-  - Processes making unexpected network connections
-- Correlated:
-  - Process creation → network activity → persistence
-- Practiced **alert-style thinking**, not just log reading
+| Source IP | Username Targeted | Pattern |
+|---|---|---|
+| 173.234.31.186 | webmaster | Repeated invalid user attempts, connection closed preauth |
+| 52.80.34.196 | test9 | Invalid user, resolves to AWS cn-north-1 compute |
+| 202.100.179.208 | chen | Failed password for invalid user |
+| 5.36.59.76 | root | 5 repeated failures, PAM lockout triggered, disconnected |
+| 112.95.230.3 | root | Failed password for root on ports 45378 and 47068 |
 
----
-
-## 🐧 Linux Log Analysis
-
-Analyzed Linux authentication and system logs to detect brute-force attacks and unauthorized access attempts.
+- Server logged "POSSIBLE BREAK-IN ATTEMPT" for reverse mapping failure on 173.234.31.186
+- 5.36.59.76 triggered PAM lockout — "Too many authentication failures for root" — showing the brute force threshold was hit
+- Multiple source IPs targeting different usernames simultaneously indicating a distributed or scripted attack
+- 📌 MITRE: `T1110` Brute Force · `T1110.001` Password Guessing · `T1078` Valid Accounts
 
 ---
 
-## 📁 Linux Log Sources Analyzed
+### 🔴 DNS Traffic Analysis — Wireshark Packet Capture
 
-| Log File | Description | SOC Use Case |
-|-------|-------------|-------------|
-| `/var/log/auth.log` | Authentication & SSH activity | Brute-force, unauthorized access |
-| `/var/log/syslog` | System-wide messages | Service abuse, system anomalies |
-| `/var/log/secure` | Security logs (RHEL-based) | Auth failures, privilege misuse |
-| SSH daemon logs | SSH session details | Remote attack detection |
+Analyzed a DNS packet capture file (primary_capture.pcapng) in Wireshark, filtering for DNS responses to understand the resolution patterns and identify any unusual behavior.
 
----
+**Wireshark DNS response analysis — filter dns.flags.response == 1 applied, showing 48 displayed packets out of 4,566 total captured:**
 
-## 🔐 SSH Authentication Analysis
+<img width="1903" height="975" alt="Wireshark-Dsn analysis" src="https://github.com/user-attachments/assets/0b30d074-55cd-40be-88db-4cfcf6067a3f" />
 
-I analyzed SSH logs to detect unauthorized access attempts and attacker behavior.
+<br>
 
-### Common Log Indicators Identified
-
-- `Failed password`
-- `Invalid user`
-- `authentication failure`
-- `Connection closed`
-- `Too many authentication failures`
-
-Example log evidence:
-- Repeated login failures against non-existent users
-- Multiple attempts from the same external IP
-- Attacks targeting `root` and common usernames
+- Filtered DNS responses using `dns.flags.response == 1` to isolate server replies from client queries
+- Observed standard A record responses for domains including example.org, google.com, gstatic.com
+- CNAME chain visible for detectportal.firefox.com resolving through mozaws.net — normal browser behavior
+- IPv6 AAAA records present alongside IPv4 A records for major domains
+- Packet inspection of Frame 8 shows standard query response, no error, recursion available — normal DNS behavior
+- 📌 MITRE: `T1071.004` DNS · `T1046` Network Service Scanning
 
 ---
 
-**Outcome:**
-- Improved ability to triage Linux-based authentication alerts
-- Developed a structured investigation workflow similar to SOC environments
+### 🔴 Windows Log Analysis — Event ID Investigation
 
-### 🔎 Investigation Commands Used
+Analyzed Windows Security Event logs to identify authentication anomalies and suspicious activity patterns.
 
-```bash
-grep "Failed password" auth.log
-grep "Invalid user" auth.log
-grep "authentication failure" auth.log
-grep "sshd" auth.log
+**Key Event IDs investigated:**
+
+| Event ID | Description | What it indicates |
+|---|---|---|
+| 4625 | Failed logon | Brute force or credential stuffing attempt |
+| 4624 | Successful logon | Baseline for detecting unusual successful access |
+| 4648 | Logon using explicit credentials | Lateral movement indicator |
+| 4740 | Account locked out | Brute force threshold reached |
+
+- Identified repeated 4625 failures followed by 4740 account lockout — confirmed brute force sequence
+- Correlated 4624 success events against 4625 failure patterns to identify which accounts were eventually accessed
+- 📌 MITRE: `T1110` Brute Force · `T1078` Valid Accounts · `T1021` Remote Services
+
+---
+
+### 🔴 Linux Authentication Log Analysis
+
+Analyzed Linux auth.log for privilege escalation attempts and abnormal authentication patterns.
+
+**What was identified:**
+- Sudo escalation attempts logged with timestamps and executing user
+- PAM session open and close events used to track user session duration
+- SSH login anomalies identified by correlating successful vs failed login ratios per source IP
+- Root login attempts via SSH flagged as high priority since direct root SSH access should typically be disabled
+
+- 📌 MITRE: `T1078` Valid Accounts · `T1548.003` Sudo and Sudo Caching
+
+---
+
+## 🔎 IOC Extraction Workflow
+
+Every suspicious event was processed through this workflow:
+
+```
+Raw log entry identified
+    ↓
+Event ID or log field extracted
+    ↓
+Source IP, username, timestamp documented
+    ↓
+Pattern classified: brute force / escalation / lateral movement / anomaly
+    ↓
+Severity assigned: High / Medium / Low
+    ↓
+Finding documented with evidence
+```
+
+---
+
+## 📁 Repository Structure
+
+```
+Log-Analysis-Detection-Notes/
+├── linux/
+│   ├── ssh-brute-force-analysis.png
+│   └── auth-log-investigation.md
+├── windows/
+│   └── event-id-investigation.md
+└── network/
+    └── wireshark-dns-analysis.png
+```
+
+---
+
+⬅️ [Back to SOC Home Lab](https://github.com/rohithbaggu56-dot/Home-SOC-Lab-Detection-Log-Analysis) · [Back to Portfolio](https://github.com/rohithbaggu56-dot)
