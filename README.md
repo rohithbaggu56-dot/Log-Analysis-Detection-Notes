@@ -13,11 +13,11 @@ Raw Windows and Linux log analysis focused on reading event data directly and id
 
 ---
 
-### 🔴 SSH Brute Force Detection — Raw Log Analysis
+### 🔴 SSH Brute Force Detection – Raw Log Analysis
 
 Analyzed OpenSSH_2k.log directly in the terminal using grep filtering to identify brute force patterns across multiple source IPs.
 
-**Raw terminal analysis — head command to read the log, grep -Ei filter to extract failed password, invalid user, and authentication failure events:**
+**Raw terminal analysis – head command to read the log, grep -Ei filter to extract failed password, invalid user, and authentication failure events:**
 
 <img width="1910" height="922" alt="Ubuntu-SSH-log analysis" src="https://github.com/user-attachments/assets/8650a691-144b-40d9-8680-860f290ee371" />
 
@@ -40,11 +40,11 @@ Analyzed OpenSSH_2k.log directly in the terminal using grep filtering to identif
 
 ---
 
-### 🔴 DNS Traffic Analysis — Wireshark Packet Capture
+### 🔴 DNS Traffic Analysis – Wireshark Packet Capture
 
 Analyzed a DNS packet capture file (primary_capture.pcapng) in Wireshark, filtering for DNS responses to understand the resolution patterns and identify any unusual behavior.
 
-**Wireshark DNS response analysis — filter dns.flags.response == 1 applied, showing 48 displayed packets out of 4,566 total captured:**
+**Wireshark DNS response analysis – filter dns.flags.response == 1 applied, showing 48 displayed packets out of 4,566 total captured:**
 
 <img width="1903" height="975" alt="Wireshark-Dsn analysis" src="https://github.com/user-attachments/assets/0b30d074-55cd-40be-88db-4cfcf6067a3f" />
 
@@ -59,7 +59,7 @@ Analyzed a DNS packet capture file (primary_capture.pcapng) in Wireshark, filter
 
 ---
 
-### 🔴 Windows Log Analysis — Event ID Investigation
+### 🔴 Windows Log Analysis – Event ID Investigation
 
 Analyzed Windows Security Event logs to identify authentication anomalies and suspicious activity patterns.
 
